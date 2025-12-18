@@ -2,7 +2,7 @@
 
 A Go implementation of process sandboxing with network and filesystem restrictions.
 
-`fence` wraps arbitrary commands in a security sandbox, blocking network access by default and restricting filesystem operations based on configurable rules.
+**`fence`** wraps arbitrary commands in a security sandbox, blocking network access by default and restricting filesystem operations based on configurable rules.
 
 > [!NOTE]
 > This is still a work in progress and may see significant changes.
@@ -12,9 +12,11 @@ A Go implementation of process sandboxing with network and filesystem restrictio
 - **Network Isolation**: All network access blocked by default
 - **Domain Allowlisting**: Configure which domains are allowed
 - **Filesystem Restrictions**: Control read/write access to paths
+- **Violation Monitoring**: Real-time logging of blocked requests and sandbox denials
 - **Cross-Platform**: macOS (sandbox-exec) and Linux (bubblewrap)
 - **HTTP/SOCKS5 Proxies**: Built-in filtering proxies for domain control
-- **Library + CLI**: Use as a Go package or command-line tool
+
+You can use **`fence`** as a Go package or CLI tool.
 
 ## Installation
 
@@ -87,7 +89,9 @@ fence [flags] [command...]
 
 Flags:
   -c string        Run command string directly (like sh -c)
-  -d, --debug      Enable debug logging
+  -d, --debug      Enable debug logging (shows sandbox command, proxy activity, filter rules)
+  -m, --monitor    Monitor mode (shows blocked requests and violations only)
+  -p, --port       Expose port for inbound connections (can be repeated)
   -s, --settings   Path to settings file (default: ~/.fence.json)
   -h, --help       Help for fence
 ```
@@ -107,6 +111,12 @@ fence -c "git clone https://github.com/user/repo && cd repo && npm install"
 
 # Debug mode shows proxy activity
 fence -d wget https://example.com
+
+# Monitor mode shows violations/blocked requests only
+fence -m npm install
+
+# Expose a port for inbound connections
+fence -p 3000 -c "npm run dev"
 ```
 
 ## Library Usage
@@ -130,8 +140,8 @@ func main() {
         },
     }
 
-    // Create manager
-    manager := fence.NewManager(cfg, false)
+    // Create manager (debug=false, monitor=false)
+    manager := fence.NewManager(cfg, false, false)
     defer manager.Cleanup()
 
     // Initialize (starts proxies)
@@ -180,7 +190,7 @@ For detailed security model, limitations, and architecture, see [ARCHITECTURE.md
 
 ### Linux
 
-- `bubblewrap` (bwrap)
+- `bubblewrap` (for sandboxing)
 - `socat` (for network bridging)
 
 Install on Ubuntu/Debian:

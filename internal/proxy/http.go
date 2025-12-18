@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,15 +25,19 @@ type HTTPProxy struct {
 	listener net.Listener
 	filter   FilterFunc
 	debug    bool
+	monitor  bool
 	mu       sync.RWMutex
 	running  bool
 }
 
 // NewHTTPProxy creates a new HTTP proxy with the given filter.
-func NewHTTPProxy(filter FilterFunc, debug bool) *HTTPProxy {
+// If monitor is true, only blocked requests are logged.
+// If debug is true, all requests and filter rules are logged.
+func NewHTTPProxy(filter FilterFunc, debug, monitor bool) *HTTPProxy {
 	return &HTTPProxy{
-		filter: filter,
-		debug:  debug,
+		filter:  filter,
+		debug:   debug,
+		monitor: monitor,
 	}
 }
 
@@ -95,6 +100,7 @@ func (p *HTTPProxy) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleConnect handles HTTPS CONNECT requests (tunnel).
 func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	host, portStr, err := net.SplitHostPort(r.Host)
 	if err != nil {
 		host = r.Host
@@ -108,10 +114,12 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	// Check if allowed
 	if !p.filter(host, port) {
-		p.logDebug("CONNECT blocked: %s:%d", host, port)
+		p.logRequest("CONNECT", fmt.Sprintf("https://%s:%d", host, port), host, 403, "BLOCKED", time.Since(start))
 		http.Error(w, "Connection blocked by network allowlist", http.StatusForbidden)
 		return
 	}
+
+	p.logRequest("CONNECT", fmt.Sprintf("https://%s:%d", host, port), host, 200, "ALLOWED", time.Since(start))
 
 	// Connect to target
 	targetConn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 10*time.Second)
@@ -157,6 +165,7 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 // handleHTTP handles regular HTTP proxy requests.
 func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	targetURL, err := url.Parse(r.RequestURI)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -172,7 +181,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !p.filter(host, port) {
-		p.logDebug("HTTP blocked: %s:%d", host, port)
+		p.logRequest(r.Method, r.RequestURI, host, 403, "BLOCKED", time.Since(start))
 		http.Error(w, "Connection blocked by network allowlist", http.StatusForbidden)
 		return
 	}
@@ -203,7 +212,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := client.Do(proxyReq)
 	if err != nil {
-		p.logDebug("HTTP request failed: %v", err)
+		p.logRequest(r.Method, r.RequestURI, host, 502, "ERROR", time.Since(start))
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
@@ -218,21 +227,57 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
+
+	p.logRequest(r.Method, r.RequestURI, host, resp.StatusCode, "ALLOWED", time.Since(start))
 }
 
 func (p *HTTPProxy) logDebug(format string, args ...interface{}) {
 	if p.debug {
-		fmt.Printf("[fence:http] "+format+"\n", args...)
+		fmt.Fprintf(os.Stderr, "[fence:http] "+format+"\n", args...)
 	}
 }
 
+// logRequest logs a detailed request entry.
+// In monitor mode (-m), only blocked/error requests are logged.
+// In debug mode (-d), all requests are logged.
+func (p *HTTPProxy) logRequest(method, url, host string, status int, action string, duration time.Duration) {
+	isBlocked := action == "BLOCKED" || action == "ERROR"
+
+	if p.monitor && !p.debug && !isBlocked {
+		return
+	}
+
+	if !p.debug && !p.monitor {
+		return
+	}
+
+	timestamp := time.Now().Format("15:04:05")
+	statusIcon := "✓"
+	switch action {
+	case "BLOCKED":
+		statusIcon = "✗"
+	case "ERROR":
+		statusIcon = "!"
+	}
+	fmt.Fprintf(os.Stderr, "[fence:http] %s %s %-7s %d %s %s (%v)\n", timestamp, statusIcon, method, status, host, truncateURL(url, 60), duration.Round(time.Millisecond))
+}
+
+// truncateURL shortens a URL for display.
+func truncateURL(url string, maxLen int) string {
+	if len(url) <= maxLen {
+		return url
+	}
+	return url[:maxLen-3] + "..."
+}
+
 // CreateDomainFilter creates a filter function from a config.
+// When debug is true, logs filter rule matches to stderr.
 func CreateDomainFilter(cfg *config.Config, debug bool) FilterFunc {
 	return func(host string, port int) bool {
 		if cfg == nil {
 			// No config = deny all
 			if debug {
-				fmt.Printf("[fence:filter] No config, denying: %s:%d\n", host, port)
+				fmt.Fprintf(os.Stderr, "[fence:filter] No config, denying: %s:%d\n", host, port)
 			}
 			return false
 		}
@@ -241,7 +286,7 @@ func CreateDomainFilter(cfg *config.Config, debug bool) FilterFunc {
 		for _, denied := range cfg.Network.DeniedDomains {
 			if config.MatchesDomain(host, denied) {
 				if debug {
-					fmt.Printf("[fence:filter] Denied by rule: %s:%d (matched %s)\n", host, port, denied)
+					fmt.Fprintf(os.Stderr, "[fence:filter] Denied by rule: %s:%d (matched %s)\n", host, port, denied)
 				}
 				return false
 			}
@@ -251,14 +296,14 @@ func CreateDomainFilter(cfg *config.Config, debug bool) FilterFunc {
 		for _, allowed := range cfg.Network.AllowedDomains {
 			if config.MatchesDomain(host, allowed) {
 				if debug {
-					fmt.Printf("[fence:filter] Allowed by rule: %s:%d (matched %s)\n", host, port, allowed)
+					fmt.Fprintf(os.Stderr, "[fence:filter] Allowed by rule: %s:%d (matched %s)\n", host, port, allowed)
 				}
 				return true
 			}
 		}
 
 		if debug {
-			fmt.Printf("[fence:filter] No matching rule, denying: %s:%d\n", host, port)
+			fmt.Fprintf(os.Stderr, "[fence:filter] No matching rule, denying: %s:%d\n", host, port)
 		}
 		return false
 	}

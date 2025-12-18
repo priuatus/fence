@@ -1,4 +1,4 @@
-# Fence Architecture
+# Architecture
 
 Fence restricts network and filesystem access for arbitrary commands. It works by:
 
@@ -36,6 +36,7 @@ fence/
 │       ├── manager.go   # Orchestrates sandbox lifecycle
 │       ├── macos.go     # macOS sandbox-exec profiles
 │       ├── linux.go     # Linux bubblewrap + socat bridges
+│       ├── monitor.go   # macOS log stream violation monitoring
 │       ├── dangerous.go # Protected file/directory lists
 │       └── utils.go     # Path normalization, shell quoting
 └── pkg/fence/           # Public Go API
@@ -241,7 +242,62 @@ flowchart TD
 | Proxy routing | Environment variables | socat bridges + env vars |
 | Filesystem control | Profile rules | Bind mounts |
 | Inbound connections | Profile rules (`network-bind`) | Reverse socat bridges |
+| Violation monitoring | log stream + proxy | proxy only |
 | Requirements | Built-in | bwrap, socat |
+
+## Violation Monitoring
+
+The `-m` (monitor) flag enables real-time visibility into blocked operations.
+
+### Output Prefixes
+
+| Prefix | Source | Description |
+|--------|--------|-------------|
+| `[fence:http]` | Both | HTTP/HTTPS proxy (blocked requests only in monitor mode) |
+| `[fence:socks]` | Both | SOCKS5 proxy (blocked requests only in monitor mode) |
+| `[fence:logstream]` | macOS only | Kernel-level sandbox violations from `log stream` |
+| `[fence:filter]` | Both | Domain filter rule matches (debug mode only) |
+
+### macOS Log Stream
+
+On macOS, fence spawns `log stream` with a predicate to capture sandbox violations:
+
+```bash
+log stream --predicate 'eventMessage ENDSWITH "_SBX"' --style compact
+```
+
+Violations include:
+
+- `network-outbound` - blocked network connections
+- `file-read*` - blocked file reads
+- `file-write*` - blocked file writes
+
+Filtered out (too noisy):
+
+- `mach-lookup` - IPC service lookups
+- `file-ioctl` - device control operations
+- `/dev/tty*` writes - terminal output
+- `mDNSResponder` - system DNS resolution
+- `/private/var/run/syslog` - system logging
+
+### Linux Limitations
+
+Linux uses network namespace isolation (`--unshare-net`), which prevents connections at the namespace level rather than logging them. There's no kernel-level violation stream equivalent to macOS.
+
+With `-m` on Linux, you only see proxy-level denials:
+
+```text
+[fence:http] 14:30:01 ✗ CONNECT 403 evil.com (blocked by proxy)
+[fence:socks] 14:30:02 ✗ CONNECT evil.com:22 BLOCKED
+```
+
+### Debug vs Monitor Mode
+
+| Flag | Proxy logs | Filter rules | Log stream | Sandbox command |
+|------|------------|--------------|------------|-----------------|
+| `-m` | Blocked only | No | Yes (macOS) | No |
+| `-d` | All | Yes | No | Yes |
+| `-m -d` | All | Yes | Yes (macOS) | Yes |
 
 ## Security Model
 
@@ -268,7 +324,7 @@ Access control follows a deny-by-default model for writes:
 
 #### Dangerous File Protection
 
-Certain paths are always protected regardless of config to prevent common attack vectors:
+Certain paths are always protected from writes regardless of config to prevent common attack vectors:
 
 - Shell configs: `.bashrc`, `.zshrc`, `.profile`, `.bash_profile`
 - Git hooks: `.git/hooks/*` (can execute arbitrary code on git operations)
@@ -329,10 +385,3 @@ Apple deprecated `sandbox-exec` but it still works on current macOS (including S
 #### Not for hostile code containment
 
 Fence is defense-in-depth for running semi-trusted code (npm install, build scripts, CI jobs), not a security boundary against actively malicious software designed to escape sandboxes.
-
-## Dependencies
-
-- `github.com/spf13/cobra` - CLI framework
-- `github.com/things-go/go-socks5` - SOCKS5 proxy implementation
-- `bubblewrap` (Linux) - Unprivileged sandboxing
-- `socat` (Linux) - Socket relay for namespace bridging

@@ -20,14 +20,16 @@ type Manager struct {
 	socksPort     int
 	exposedPorts  []int
 	debug         bool
+	monitor       bool
 	initialized   bool
 }
 
 // NewManager creates a new sandbox manager.
-func NewManager(cfg *config.Config, debug bool) *Manager {
+func NewManager(cfg *config.Config, debug, monitor bool) *Manager {
 	return &Manager{
-		config: cfg,
-		debug:  debug,
+		config:  cfg,
+		debug:   debug,
+		monitor: monitor,
 	}
 }
 
@@ -48,14 +50,14 @@ func (m *Manager) Initialize() error {
 
 	filter := proxy.CreateDomainFilter(m.config, m.debug)
 
-	m.httpProxy = proxy.NewHTTPProxy(filter, m.debug)
+	m.httpProxy = proxy.NewHTTPProxy(filter, m.debug, m.monitor)
 	httpPort, err := m.httpProxy.Start()
 	if err != nil {
 		return fmt.Errorf("failed to start HTTP proxy: %w", err)
 	}
 	m.httpPort = httpPort
 
-	m.socksProxy = proxy.NewSOCKSProxy(filter, m.debug)
+	m.socksProxy = proxy.NewSOCKSProxy(filter, m.debug, m.monitor)
 	socksPort, err := m.socksProxy.Start()
 	if err != nil {
 		m.httpProxy.Stop()

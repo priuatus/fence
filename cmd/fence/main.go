@@ -17,6 +17,7 @@ import (
 
 var (
 	debug        bool
+	monitor      bool
 	settingsPath string
 	cmdString    string
 	exposePorts  []string
@@ -60,6 +61,7 @@ Configuration file format (~/.fence.json):
 	}
 
 	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
+	rootCmd.Flags().BoolVarP(&monitor, "monitor", "m", false, "Monitor and log sandbox violations (macOS: log stream, all: proxy denials)")
 	rootCmd.Flags().StringVarP(&settingsPath, "settings", "s", "", "Path to settings file (default: ~/.fence.json)")
 	rootCmd.Flags().StringVarP(&cmdString, "c", "c", "", "Run command string directly (like sh -c)")
 	rootCmd.Flags().StringArrayVarP(&exposePorts, "port", "p", nil, "Expose port for inbound connections (can be used multiple times)")
@@ -117,12 +119,24 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		cfg = config.Default()
 	}
 
-	manager := sandbox.NewManager(cfg, debug)
+	manager := sandbox.NewManager(cfg, debug, monitor)
 	manager.SetExposedPorts(ports)
 	defer manager.Cleanup()
 
 	if err := manager.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize sandbox: %w", err)
+	}
+
+	var logMonitor *sandbox.LogMonitor
+	if monitor {
+		logMonitor = sandbox.NewLogMonitor(sandbox.GetSessionSuffix())
+		if logMonitor != nil {
+			if err := logMonitor.Start(); err != nil {
+				fmt.Fprintf(os.Stderr, "[fence] Warning: failed to start log monitor: %v\n", err)
+			} else {
+				defer logMonitor.Stop()
+			}
+		}
 	}
 
 	sandboxedCommand, err := manager.WrapCommand(command)

@@ -19,8 +19,10 @@ type FilesystemConfig = config.FilesystemConfig
 type Manager = sandbox.Manager
 
 // NewManager creates a new sandbox manager.
-func NewManager(cfg *Config, debug bool) *Manager {
-	return sandbox.NewManager(cfg, debug)
+// If debug is true, verbose logging is enabled.
+// If monitor is true, only violations (blocked requests) are logged.
+func NewManager(cfg *Config, debug, monitor bool) *Manager {
+	return sandbox.NewManager(cfg, debug, monitor)
 }
 
 // DefaultConfig returns the default configuration with all network blocked.

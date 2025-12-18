@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"time"
 
 	"github.com/things-go/go-socks5"
 )
@@ -14,21 +16,26 @@ type SOCKSProxy struct {
 	listener net.Listener
 	filter   FilterFunc
 	debug    bool
+	monitor  bool
 	port     int
 }
 
 // NewSOCKSProxy creates a new SOCKS5 proxy with the given filter.
-func NewSOCKSProxy(filter FilterFunc, debug bool) *SOCKSProxy {
+// If monitor is true, only blocked connections are logged.
+// If debug is true, all connections are logged.
+func NewSOCKSProxy(filter FilterFunc, debug, monitor bool) *SOCKSProxy {
 	return &SOCKSProxy{
-		filter: filter,
-		debug:  debug,
+		filter:  filter,
+		debug:   debug,
+		monitor: monitor,
 	}
 }
 
 // fenceRuleSet implements socks5.RuleSet for domain filtering.
 type fenceRuleSet struct {
-	filter FilterFunc
-	debug  bool
+	filter  FilterFunc
+	debug   bool
+	monitor bool
 }
 
 func (r *fenceRuleSet) Allow(ctx context.Context, req *socks5.Request) (context.Context, bool) {
@@ -39,11 +46,14 @@ func (r *fenceRuleSet) Allow(ctx context.Context, req *socks5.Request) (context.
 	port := req.DestAddr.Port
 
 	allowed := r.filter(host, port)
-	if r.debug {
+
+	shouldLog := r.debug || (r.monitor && !allowed)
+	if shouldLog {
+		timestamp := time.Now().Format("15:04:05")
 		if allowed {
-			fmt.Printf("[fence:socks] Allowed: %s:%d\n", host, port)
+			fmt.Fprintf(os.Stderr, "[fence:socks] %s ✓ CONNECT %s:%d ALLOWED\n", timestamp, host, port)
 		} else {
-			fmt.Printf("[fence:socks] Blocked: %s:%d\n", host, port)
+			fmt.Fprintf(os.Stderr, "[fence:socks] %s ✗ CONNECT %s:%d BLOCKED\n", timestamp, host, port)
 		}
 	}
 	return ctx, allowed
@@ -61,8 +71,9 @@ func (p *SOCKSProxy) Start() (int, error) {
 
 	server := socks5.NewServer(
 		socks5.WithRule(&fenceRuleSet{
-			filter: p.filter,
-			debug:  p.debug,
+			filter:  p.filter,
+			debug:   p.debug,
+			monitor: p.monitor,
 		}),
 	)
 	p.server = server
@@ -70,13 +81,13 @@ func (p *SOCKSProxy) Start() (int, error) {
 	go func() {
 		if err := p.server.Serve(p.listener); err != nil {
 			if p.debug {
-				fmt.Printf("[fence:socks] Server error: %v\n", err)
+				fmt.Fprintf(os.Stderr, "[fence:socks] Server error: %v\n", err)
 			}
 		}
 	}()
 
 	if p.debug {
-		fmt.Printf("[fence:socks] SOCKS5 proxy listening on localhost:%d\n", p.port)
+		fmt.Fprintf(os.Stderr, "[fence:socks] SOCKS5 proxy listening on localhost:%d\n", p.port)
 	}
 	return p.port, nil
 }
