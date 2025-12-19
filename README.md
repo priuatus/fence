@@ -2,7 +2,7 @@
 
 A Go implementation of process sandboxing with network and filesystem restrictions.
 
-**`fence`** wraps arbitrary commands in a security sandbox, blocking network access by default and restricting filesystem operations based on configurable rules. Useful for AI coding agents, untrusted code execution, or running processes with controlled side effects.
+`fence` wraps commands in a sandbox that blocks network access by default and restricts filesystem operations based on configurable rules. Useful for AI coding agents, untrusted code execution, or running processes with controlled side effects.
 
 ## Features
 
@@ -13,7 +13,7 @@ A Go implementation of process sandboxing with network and filesystem restrictio
 - **Cross-Platform**: macOS (sandbox-exec) and Linux (bubblewrap)
 - **HTTP/SOCKS5 Proxies**: Built-in filtering proxies for domain control
 
-You can use **`fence`** as a Go package or CLI tool.
+You can use `fence` as a Go package or CLI tool.
 
 ## Installation
 
