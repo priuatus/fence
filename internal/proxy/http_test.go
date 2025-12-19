@@ -229,7 +229,7 @@ func TestNewHTTPProxy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			proxy := NewHTTPProxy(filter, tt.debug, tt.monitor)
 			if proxy == nil {
-				t.Error("NewHTTPProxy() returned nil")
+				t.Fatal("NewHTTPProxy() returned nil")
 			}
 			if proxy.debug != tt.debug {
 				t.Errorf("debug = %v, want %v", proxy.debug, tt.debug)

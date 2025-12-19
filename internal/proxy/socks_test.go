@@ -86,7 +86,7 @@ func TestNewSOCKSProxy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			proxy := NewSOCKSProxy(filter, tt.debug, tt.monitor)
 			if proxy == nil {
-				t.Error("NewSOCKSProxy() returned nil")
+				t.Fatal("NewSOCKSProxy() returned nil")
 			}
 			if proxy.debug != tt.debug {
 				t.Errorf("debug = %v, want %v", proxy.debug, tt.debug)

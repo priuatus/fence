@@ -195,7 +195,7 @@ func TestLoad(t *testing.T) {
 			content: "",
 			setup: func(dir string) string {
 				path := filepath.Join(dir, "empty.json")
-				_ = os.WriteFile(path, []byte(""), 0o644)
+				_ = os.WriteFile(path, []byte(""), 0o600)
 				return path
 			},
 			wantNil: true,
@@ -206,7 +206,7 @@ func TestLoad(t *testing.T) {
 			content: "   \n\t  ",
 			setup: func(dir string) string {
 				path := filepath.Join(dir, "whitespace.json")
-				_ = os.WriteFile(path, []byte("   \n\t  "), 0o644)
+				_ = os.WriteFile(path, []byte("   \n\t  "), 0o600)
 				return path
 			},
 			wantNil: true,
@@ -217,7 +217,7 @@ func TestLoad(t *testing.T) {
 			setup: func(dir string) string {
 				path := filepath.Join(dir, "valid.json")
 				content := `{"network":{"allowedDomains":["example.com"]}}`
-				_ = os.WriteFile(path, []byte(content), 0o644)
+				_ = os.WriteFile(path, []byte(content), 0o600)
 				return path
 			},
 			wantNil: false,
@@ -235,7 +235,7 @@ func TestLoad(t *testing.T) {
 			name: "invalid JSON",
 			setup: func(dir string) string {
 				path := filepath.Join(dir, "invalid.json")
-				_ = os.WriteFile(path, []byte("{invalid json}"), 0o644)
+				_ = os.WriteFile(path, []byte("{invalid json}"), 0o600)
 				return path
 			},
 			wantNil: false,
@@ -246,7 +246,7 @@ func TestLoad(t *testing.T) {
 			setup: func(dir string) string {
 				path := filepath.Join(dir, "invalid_domain.json")
 				content := `{"network":{"allowedDomains":["*.com"]}}`
-				_ = os.WriteFile(path, []byte(content), 0o644)
+				_ = os.WriteFile(path, []byte(content), 0o600)
 				return path
 			},
 			wantNil: false,
