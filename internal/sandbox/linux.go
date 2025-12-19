@@ -193,33 +193,132 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+// getMandatoryDenyPaths returns concrete paths (not globs) that must be protected.
+// This expands the glob patterns from GetMandatoryDenyPatterns into real paths.
+func getMandatoryDenyPaths(cwd string) []string {
+	var paths []string
+
+	// Dangerous files in cwd
+	for _, f := range DangerousFiles {
+		p := filepath.Join(cwd, f)
+		paths = append(paths, p)
+	}
+
+	// Dangerous directories in cwd
+	for _, d := range DangerousDirectories {
+		p := filepath.Join(cwd, d)
+		paths = append(paths, p)
+	}
+
+	// Git hooks in cwd
+	paths = append(paths, filepath.Join(cwd, ".git/hooks"))
+
+	// Git config in cwd
+	paths = append(paths, filepath.Join(cwd, ".git/config"))
+
+	// Also protect home directory dangerous files
+	home, err := os.UserHomeDir()
+	if err == nil {
+		for _, f := range DangerousFiles {
+			p := filepath.Join(home, f)
+			paths = append(paths, p)
+		}
+	}
+
+	return paths
+}
+
 // WrapCommandLinux wraps a command with Linux bubblewrap sandbox.
 func WrapCommandLinux(cfg *config.Config, command string, bridge *LinuxBridge, reverseBridge *ReverseBridge, debug bool) (string, error) {
-	// Check for bwrap
 	if _, err := exec.LookPath("bwrap"); err != nil {
 		return "", fmt.Errorf("bubblewrap (bwrap) is required on Linux but not found: %w", err)
 	}
 
-	// Find shell
 	shell := "bash"
 	shellPath, err := exec.LookPath(shell)
 	if err != nil {
 		return "", fmt.Errorf("shell %q not found: %w", shell, err)
 	}
 
-	// Build bwrap args
+	cwd, _ := os.Getwd()
+
+	// Build bwrap args with filesystem restrictions
 	bwrapArgs := []string{
 		"bwrap",
 		"--new-session",
 		"--die-with-parent",
-		"--unshare-net",    // Network namespace isolation
-		"--unshare-pid",    // PID namespace isolation
-		"--bind", "/", "/", // Bind root filesystem
-		"--dev", "/dev", // Mount /dev
-		"--proc", "/proc", // Mount /proc
+		"--unshare-net", // Network namespace isolation
+		"--unshare-pid", // PID namespace isolation
 	}
 
-	// Bind the outbound Unix sockets into the sandbox
+	// Start with read-only root filesystem (default deny writes)
+	bwrapArgs = append(bwrapArgs, "--ro-bind", "/", "/")
+
+	// Mount special filesystems
+	bwrapArgs = append(bwrapArgs, "--dev", "/dev")
+	bwrapArgs = append(bwrapArgs, "--proc", "/proc")
+
+	// /tmp needs to be writable for many programs
+	bwrapArgs = append(bwrapArgs, "--tmpfs", "/tmp")
+
+	writablePaths := make(map[string]bool)
+
+	// Add default write paths (system paths needed for operation)
+	for _, p := range GetDefaultWritePaths() {
+		// Skip /dev paths (handled by --dev) and /tmp paths (handled by --tmpfs)
+		if strings.HasPrefix(p, "/dev/") || strings.HasPrefix(p, "/tmp/") || strings.HasPrefix(p, "/private/tmp/") {
+			continue
+		}
+		writablePaths[p] = true
+	}
+
+	// Add user-specified allowWrite paths
+	if cfg != nil && cfg.Filesystem.AllowWrite != nil {
+		for _, p := range cfg.Filesystem.AllowWrite {
+			normalized := NormalizePath(p)
+			if !ContainsGlobChars(normalized) {
+				writablePaths[normalized] = true
+			}
+		}
+	}
+
+	// Make writable paths actually writable (override read-only root)
+	for p := range writablePaths {
+		if fileExists(p) {
+			bwrapArgs = append(bwrapArgs, "--bind", p, p)
+		}
+	}
+
+	// Handle denyRead paths - hide them with tmpfs
+	if cfg != nil && cfg.Filesystem.DenyRead != nil {
+		for _, p := range cfg.Filesystem.DenyRead {
+			normalized := NormalizePath(p)
+			if !ContainsGlobChars(normalized) && fileExists(normalized) {
+				bwrapArgs = append(bwrapArgs, "--tmpfs", normalized)
+			}
+		}
+	}
+
+	// Apply mandatory deny patterns (make dangerous files/dirs read-only)
+	// This overrides any writable mounts for these paths
+	mandatoryDeny := getMandatoryDenyPaths(cwd)
+	for _, p := range mandatoryDeny {
+		if fileExists(p) {
+			bwrapArgs = append(bwrapArgs, "--ro-bind", p, p)
+		}
+	}
+
+	// Handle explicit denyWrite paths (make them read-only)
+	if cfg != nil && cfg.Filesystem.DenyWrite != nil {
+		for _, p := range cfg.Filesystem.DenyWrite {
+			normalized := NormalizePath(p)
+			if !ContainsGlobChars(normalized) && fileExists(normalized) {
+				bwrapArgs = append(bwrapArgs, "--ro-bind", normalized, normalized)
+			}
+		}
+	}
+
+	// Bind the outbound Unix sockets into the sandbox (need to be writable)
 	if bridge != nil {
 		bwrapArgs = append(bwrapArgs,
 			"--bind", bridge.HTTPSocketPath, bridge.HTTPSocketPath,
@@ -227,11 +326,13 @@ func WrapCommandLinux(cfg *config.Config, command string, bridge *LinuxBridge, r
 		)
 	}
 
-	// Note: Reverse (inbound) Unix sockets don't need explicit binding
-	// because we use --bind / / which shares the entire filesystem.
-	// The sandbox-side socat creates the socket, which is visible to the host.
+	// Bind reverse socket directory if needed (sockets created inside sandbox)
+	if reverseBridge != nil && len(reverseBridge.SocketPaths) > 0 {
+		// Get the temp directory containing the reverse sockets
+		tmpDir := filepath.Dir(reverseBridge.SocketPaths[0])
+		bwrapArgs = append(bwrapArgs, "--bind", tmpDir, tmpDir)
+	}
 
-	// Add environment variables for the sandbox
 	bwrapArgs = append(bwrapArgs, "--", shellPath, "-c")
 
 	// Build the inner command that sets up socat listeners and runs the user command
@@ -296,11 +397,11 @@ sleep 0.1
 	bwrapArgs = append(bwrapArgs, innerScript.String())
 
 	if debug {
+		features := []string{"network filtering", "filesystem restrictions"}
 		if reverseBridge != nil && len(reverseBridge.Ports) > 0 {
-			fmt.Fprintf(os.Stderr, "[fence:linux] Wrapping command with bwrap (network filtering + inbound ports: %v)\n", reverseBridge.Ports)
-		} else {
-			fmt.Fprintf(os.Stderr, "[fence:linux] Wrapping command with bwrap (network filtering via socat bridges)\n")
+			features = append(features, fmt.Sprintf("inbound ports: %v", reverseBridge.Ports))
 		}
+		fmt.Fprintf(os.Stderr, "[fence:linux] Wrapping command with bwrap (%s)\n", strings.Join(features, ", "))
 	}
 
 	return ShellQuote(bwrapArgs), nil
