@@ -1,10 +1,10 @@
-# fence
+# Fence
 
 ![GitHub Release](https://img.shields.io/github/v/release/Use-Tusk/fence)
 
 A Go implementation of process sandboxing with network and filesystem restrictions.
 
-`fence` wraps commands in a sandbox that blocks network access by default and restricts filesystem operations based on configurable rules. Useful for AI coding agents, untrusted code execution, or running processes with controlled side effects.
+Fence wraps commands in a sandbox that blocks network access by default and restricts filesystem operations based on configurable rules. It's most useful for running semi-trusted code (package installs, build scripts, CI jobs, unfamiliar repos) with controlled side effects, and it can also complement AI coding agents as defense-in-depth.
 
 ## Features
 
@@ -15,7 +15,7 @@ A Go implementation of process sandboxing with network and filesystem restrictio
 - **Cross-Platform**: macOS (sandbox-exec) and Linux (bubblewrap)
 - **HTTP/SOCKS5 Proxies**: Built-in filtering proxies for domain control
 
-You can use `fence` as a Go package or CLI tool.
+You can use Fence as a Go package or CLI tool.
 
 ## Installation
 
@@ -44,51 +44,7 @@ fence -c "echo hello && ls"
 fence -d curl https://example.com
 ```
 
-## Configuration
-
-Create `~/.fence.json` to configure allowed domains and filesystem access:
-
-```json
-{
-  "network": {
-    "allowedDomains": ["github.com", "*.npmjs.org", "registry.yarnpkg.com"],
-    "deniedDomains": ["evil.com"]
-  },
-  "filesystem": {
-    "denyRead": ["/etc/passwd"],
-    "allowWrite": [".", "/tmp"],
-    "denyWrite": [".git/hooks"]
-  }
-}
-```
-
-### Network Configuration
-
-| Field | Description |
-|-------|-------------|
-| `allowedDomains` | List of allowed domains. Supports wildcards like `*.example.com` |
-| `deniedDomains` | List of denied domains (checked before allowed) |
-| `allowUnixSockets` | List of allowed Unix socket paths (macOS) |
-| `allowAllUnixSockets` | Allow all Unix sockets |
-| `allowLocalBinding` | Allow binding to local ports |
-| `allowLocalOutbound` | Allow outbound connections to localhost, e.g., local DBs (defaults to `allowLocalBinding` if not set) |
-| `httpProxyPort` | Fixed port for HTTP proxy (default: random available port) |
-| `socksProxyPort` | Fixed port for SOCKS5 proxy (default: random available port) |
-
-### Filesystem Configuration
-
-| Field | Description |
-|-------|-------------|
-| `denyRead` | Paths to deny reading (deny-only pattern) |
-| `allowWrite` | Paths to allow writing |
-| `denyWrite` | Paths to deny writing (takes precedence) |
-| `allowGitConfig` | Allow writes to `.git/config` files |
-
-### Other Options
-
-| Field | Description |
-|-------|-------------|
-| `allowPty` | Allow pseudo-terminal (PTY) allocation in the sandbox (for MacOS) |
+For a more detailed introduction, see the [Quickstart Guide](docs/quickstart.md).
 
 ## CLI Usage
 
@@ -174,25 +130,12 @@ func main() {
 }
 ```
 
-## How It Works
+## Documentation
 
-### macOS (sandbox-exec)
-
-On macOS, fence uses Apple's `sandbox-exec` with a generated seatbelt profile that:
-
-- Denies all operations by default
-- Allows specific Mach services needed for basic operation
-- Controls network access via localhost proxies
-- Restricts filesystem read/write based on configuration
-
-### Linux (bubblewrap)
-
-On Linux, fence uses `bubblewrap` (bwrap) with:
-
-- Network namespace isolation (`--unshare-net`)
-- Filesystem bind mounts for access control
-- PID namespace isolation
-- Unix socket bridges for proxy communication
+- [Documentation index](docs/)
+- [Security model](docs/security-model.md)
+- [Architecture](ARCHITECTURE.md)
+- [Examples](examples/)
 
 For detailed security model, limitations, and architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -207,12 +150,6 @@ For detailed security model, limitations, and architecture, see [ARCHITECTURE.md
 
 - `bubblewrap` (for sandboxing)
 - `socat` (for network bridging)
-
-Install on Ubuntu/Debian:
-
-```bash
-apt install bubblewrap socat
-```
 
 ## Attribution
 

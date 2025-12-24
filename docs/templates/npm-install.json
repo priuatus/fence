@@ -1,0 +1,8 @@
+{
+  "network": {
+    "allowedDomains": ["registry.npmjs.org", "*.npmjs.org"]
+  },
+  "filesystem": {
+    "allowWrite": [".", "node_modules", "/tmp"]
+  }
+}

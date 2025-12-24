@@ -1,0 +1,10 @@
+{
+  "network": {
+    "allowedDomains": []
+  },
+  "filesystem": {
+    "allowWrite": ["./output"],
+    "denyWrite": [".env", "*.key"],
+    "denyRead": ["/etc/shadow", "/etc/passwd"]
+  }
+}

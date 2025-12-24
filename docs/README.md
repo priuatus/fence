@@ -1,0 +1,51 @@
+# Fence Documentation
+
+Fence is a sandboxing tool that restricts **network** and **filesystem** access for arbitrary commands. It's most useful for running semi-trusted code (package installs, build scripts, CI jobs, unfamiliar repos) with controlled side effects.
+
+## Getting Started
+
+- **[Quickstart](quickstart.md)** - Install fence and run your first sandboxed command in 5 minutes
+- **[Why Fence](why-fence.md)** - What problem it solves (and what it doesn't)
+
+## Guides
+
+- **[Concepts](concepts.md)** - Mental model: OS sandbox + local proxies + config
+- **[Troubleshooting](troubleshooting.md)** - Common failure modes and fixes
+- **[Using Fence with AI Agents](agents.md)** - Defense-in-depth and policy standardization
+- **[Recipes](recipes/README.md)** - Common workflows (npm/pip/git/CI)
+- **[Config Templates](templates/)** - Copy/paste templates you can start from
+
+## Reference
+
+- [README](../README.md) - CLI usage + configuration reference
+- [Architecture](../ARCHITECTURE.md) - How fence works under the hood
+- [Security Model](security-model.md) - Threat model, guarantees, and limitations
+- [Security Policy](../SECURITY.md) - Vulnerability reporting policy
+
+## Examples
+
+See [`examples/`](../examples/README.md) for runnable demos.
+
+## Quick Reference
+
+### Common commands
+
+```bash
+# Block all network (default)
+fence <command>
+
+# Use custom config
+fence --settings ./fence.json <command>
+
+# Debug mode (verbose output)
+fence -d <command>
+
+# Monitor mode (show blocked requests)
+fence -m <command>
+
+# Expose port for servers
+fence -p 3000 <command>
+
+# Run shell command
+fence -c "echo hello && ls"
+```

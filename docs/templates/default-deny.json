@@ -1,0 +1,8 @@
+{
+  "network": {
+    "allowedDomains": []
+  },
+  "filesystem": {
+    "allowWrite": []
+  }
+}

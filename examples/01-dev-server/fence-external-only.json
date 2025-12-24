@@ -1,0 +1,10 @@
+{
+  "network": {
+    "allowLocalBinding": true,
+    "allowedDomains": ["httpbin.org"],
+    "allowLocalOutbound": false
+  },
+  "filesystem": {
+    "allowWrite": [".", "/tmp"]
+  }
+}

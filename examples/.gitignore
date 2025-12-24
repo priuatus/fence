@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+
+# Build outputs
+build-output/
+dist/
+generated/
+
+# Lock files (we want fresh installs for demos)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Python
+*.pyc
+*.egg-info/
+
+# Temp files
+*.log
+*.tmp
+
