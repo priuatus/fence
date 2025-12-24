@@ -26,7 +26,23 @@ You can use Fence as a Go package or CLI tool.
 
 ## Installation
 
-At the moment, we only support MacOS and Linux. For Windows users, we recommend using WSL.
+At the moment, we only support macOS and Linux. For Windows users, we recommend using WSL.
+
+### Quick Install (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Use-Tusk/fence/main/install.sh | sh
+```
+
+To install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Use-Tusk/fence/main/install.sh | sh -s -- v0.1.0
+```
+
+### Install via Go
+
+If you have Go installed:
 
 ```bash
 go install github.com/Use-Tusk/fence/cmd/fence@latest
