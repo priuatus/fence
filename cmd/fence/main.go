@@ -70,6 +70,9 @@ Configuration file format (~/.fence.json):
     "denyRead": [],
     "allowWrite": ["."],
     "denyWrite": []
+  },
+  "command": {
+    "deny": ["git push", "npm publish"]
   }
 }`,
 		RunE:          runCommand,

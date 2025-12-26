@@ -10,6 +10,7 @@ This directory contains Fence config templates. They are small and meant to be c
 - `pip-install.json`: allow PyPI; allow writes to workspace/tmp
 - `local-dev-server.json`: allow binding and localhost outbound; allow writes to workspace/tmp
 - `agent-api-only.json`: allow common LLM API domains; allow writes to workspace
+- `git-readonly.json`: blocks destructive commands like `git push`, `rm -rf`, etc.
 
 ## Using a template
 

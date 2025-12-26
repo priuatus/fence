@@ -1,0 +1,19 @@
+{
+  "network": {
+    "allowedDomains": []
+  },
+  "filesystem": {
+    "allowWrite": ["."],
+    "denyWrite": [".git"]
+  },
+  "command": {
+    "deny": [
+      "git push",
+      "git reset",
+      "git clean",
+      "git checkout --",
+      "git rebase",
+      "git merge"
+    ]
+  }
+}

@@ -94,11 +94,17 @@ func (m *Manager) Initialize() error {
 }
 
 // WrapCommand wraps a command with sandbox restrictions.
+// Returns an error if the command is blocked by policy.
 func (m *Manager) WrapCommand(command string) (string, error) {
 	if !m.initialized {
 		if err := m.Initialize(); err != nil {
 			return "", err
 		}
+	}
+
+	// Check if command is blocked by policy
+	if err := CheckCommand(command, m.config); err != nil {
+		return "", err
 	}
 
 	plat := platform.Detect()

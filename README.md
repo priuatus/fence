@@ -11,6 +11,7 @@ Fence wraps commands in a sandbox that blocks network access by default and rest
 - **Network Isolation**: All network access blocked by default
 - **Domain Allowlisting**: Configure which domains are allowed
 - **Filesystem Restrictions**: Control read/write access to paths
+- **Command Blocking**: Block dangerous commands (e.g., `shutdown`, `rm -rf`) with configurable deny/allow lists
 - **Violation Monitoring**: Real-time logging of blocked requests and sandbox denials
 - **Cross-Platform**: macOS (sandbox-exec) and Linux (bubblewrap)
 - **HTTP/SOCKS5 Proxies**: Built-in filtering proxies for domain control
@@ -64,6 +65,7 @@ go build -o fence ./cmd/fence
 
 - `bubblewrap` (for sandboxing)
 - `socat` (for network bridging)
+- `bpftrace` (optional, for filesystem violation visibility with when monitoring with `-m`)
 
 ## Quick Start
 
@@ -105,6 +107,11 @@ fence curl https://example.com
 # Use a custom config
 fence --settings ./my-config.json npm install
 
+# Block specific commands (via config file)
+# ~/.fence.json: {"command": {"deny": ["git push", "npm publish"]}}
+fence -c "git push"  # blocked
+fence -c "git status"  # allowed
+
 # Run a shell command
 fence -c "git clone https://github.com/user/repo && cd repo && npm install"
 
@@ -142,6 +149,9 @@ func main() {
         },
         Filesystem: fence.FilesystemConfig{
             AllowWrite: []string{"."},
+        },
+        Command: fence.CommandConfig{
+            Deny: []string{"git push", "npm publish"},
         },
     }
 

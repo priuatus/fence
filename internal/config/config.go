@@ -15,6 +15,7 @@ import (
 type Config struct {
 	Network    NetworkConfig    `json:"network"`
 	Filesystem FilesystemConfig `json:"filesystem"`
+	Command    CommandConfig    `json:"command"`
 	AllowPty   bool             `json:"allowPty,omitempty"`
 }
 
@@ -38,6 +39,56 @@ type FilesystemConfig struct {
 	AllowGitConfig bool     `json:"allowGitConfig,omitempty"`
 }
 
+// CommandConfig defines command restrictions.
+type CommandConfig struct {
+	Deny        []string `json:"deny"`
+	Allow       []string `json:"allow"`
+	UseDefaults *bool    `json:"useDefaults,omitempty"`
+}
+
+// DefaultDeniedCommands returns commands that are blocked by default.
+// These are system-level dangerous commands that are rarely needed by AI agents.
+var DefaultDeniedCommands = []string{
+	// System control - can crash/reboot the machine
+	"shutdown",
+	"reboot",
+	"halt",
+	"poweroff",
+	"init 0",
+	"init 6",
+	"systemctl poweroff",
+	"systemctl reboot",
+	"systemctl halt",
+
+	// Kernel/module manipulation
+	"insmod",
+	"rmmod",
+	"modprobe",
+	"kexec",
+
+	// Disk/partition manipulation (including common variants)
+	"mkfs",
+	"mkfs.ext2",
+	"mkfs.ext3",
+	"mkfs.ext4",
+	"mkfs.xfs",
+	"mkfs.btrfs",
+	"mkfs.vfat",
+	"mkfs.ntfs",
+	"fdisk",
+	"parted",
+	"dd if=",
+
+	// Container escape vectors
+	"docker run -v /:/",
+	"docker run --privileged",
+
+	// Chroot/namespace escape
+	"chroot",
+	"unshare",
+	"nsenter",
+}
+
 // Default returns the default configuration with all network blocked.
 func Default() *Config {
 	return &Config{
@@ -49,6 +100,11 @@ func Default() *Config {
 			DenyRead:   []string{},
 			AllowWrite: []string{},
 			DenyWrite:  []string{},
+		},
+		Command: CommandConfig{
+			Deny:  []string{},
+			Allow: []string{},
+			// UseDefaults defaults to true (nil = true)
 		},
 	}
 }
@@ -112,7 +168,19 @@ func (c *Config) Validate() error {
 		return errors.New("filesystem.denyWrite contains empty path")
 	}
 
+	if slices.Contains(c.Command.Deny, "") {
+		return errors.New("command.deny contains empty command")
+	}
+	if slices.Contains(c.Command.Allow, "") {
+		return errors.New("command.allow contains empty command")
+	}
+
 	return nil
+}
+
+// UseDefaultDeniedCommands returns whether to use the default deny list.
+func (c *CommandConfig) UseDefaultDeniedCommands() bool {
+	return c.UseDefaults == nil || *c.UseDefaults
 }
 
 func validateDomainPattern(pattern string) error {
