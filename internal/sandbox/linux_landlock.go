@@ -36,7 +36,7 @@ func ApplyLandlockFromConfig(cfg *config.Config, cwd string, socketPaths []strin
 		}
 		return nil // Graceful fallback
 	}
-	defer ruleset.Close()
+	defer func() { _ = ruleset.Close() }()
 
 	if err := ruleset.Initialize(); err != nil {
 		if debug {
@@ -184,7 +184,7 @@ func (l *LandlockRuleset) Initialize() error {
 
 	fd, _, err := unix.Syscall(
 		unix.SYS_LANDLOCK_CREATE_RULESET,
-		uintptr(unsafe.Pointer(&attr)),
+		uintptr(unsafe.Pointer(&attr)), //nolint:gosec // required for syscall
 		unsafe.Sizeof(attr),
 		0,
 	)
@@ -315,21 +315,21 @@ func (l *LandlockRuleset) addPathRule(path string, access uint64) error {
 		}
 		return nil // Don't fail on paths we can't access
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 
 	// Intersect with handled access to avoid invalid combinations
 	access &= l.getHandledAccessFS()
 
 	attr := landlockPathBeneathAttr{
 		allowedAccess: access,
-		parentFd:      int32(fd),
+		parentFd:      int32(fd), //nolint:gosec // fd from unix.Open fits in int32
 	}
 
 	_, _, errno := unix.Syscall(
 		unix.SYS_LANDLOCK_ADD_RULE,
 		uintptr(l.rulesetFd),
 		LANDLOCK_RULE_PATH_BENEATH,
-		uintptr(unsafe.Pointer(&attr)),
+		uintptr(unsafe.Pointer(&attr)), //nolint:gosec // required for syscall
 	)
 	if errno != 0 {
 		return fmt.Errorf("failed to add Landlock rule for %s: %w", absPath, errno)

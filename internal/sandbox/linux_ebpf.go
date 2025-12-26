@@ -85,7 +85,7 @@ func (m *EBPFMonitor) Stop() {
 
 	// Clean up the script file
 	if m.scriptPath != "" {
-		os.Remove(m.scriptPath)
+		_ = os.Remove(m.scriptPath)
 	}
 
 	m.running = false
@@ -110,13 +110,13 @@ func (m *EBPFMonitor) tryBpftrace(ctx context.Context) error {
 	m.scriptPath = scriptPath // Store for cleanup later
 
 	if _, err := tmpFile.WriteString(script); err != nil {
-		tmpFile.Close()
-		os.Remove(scriptPath)
+		_ = tmpFile.Close()
+		_ = os.Remove(scriptPath)
 		return fmt.Errorf("failed to write script: %w", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
-	m.cmd = exec.CommandContext(ctx, bpftracePath, tmpFile.Name())
+	m.cmd = exec.CommandContext(ctx, bpftracePath, tmpFile.Name()) //nolint:gosec // bpftracePath from LookPath
 	stdout, err := m.cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create pipe: %w", err)
@@ -252,7 +252,7 @@ func (m *EBPFMonitor) traceWithPerfEvents() {
 		}
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// We'd need to set up tracepoints first, which requires additional setup
 	// For now, this is a placeholder for the full implementation
@@ -297,7 +297,7 @@ func CheckBpftraceAvailable() bool {
 	}
 
 	// Verify it can run (needs permissions)
-	cmd := exec.Command(path, "--version")
+	cmd := exec.Command(path, "--version") //nolint:gosec // path from LookPath
 	return cmd.Run() == nil
 }
 

@@ -136,7 +136,7 @@ func (f *LinuxFeatures) detectLandlock() {
 	}
 	ret, _, err = unix.Syscall(
 		unix.SYS_LANDLOCK_CREATE_RULESET,
-		uintptr(unsafe.Pointer(&attr)),
+		uintptr(unsafe.Pointer(&attr)), //nolint:gosec // required for syscall
 		unsafe.Sizeof(attr),
 		0,
 	)

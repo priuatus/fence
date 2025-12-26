@@ -421,10 +421,6 @@ func WrapCommandLinuxWithOptions(cfg *config.Config, command string, bridge *Lin
 	// Get fence executable path for Landlock wrapper
 	fenceExePath, _ := os.Executable()
 	useLandlockWrapper := opts.UseLandlock && features.CanUseLandlock() && fenceExePath != ""
-	if useLandlockWrapper {
-		// Ensure fence binary is accessible inside the sandbox (it should be via ro-bind /)
-		// We'll call it at the end of the script to apply Landlock before running user command
-	}
 
 	bwrapArgs = append(bwrapArgs, "--", shellPath, "-c")
 

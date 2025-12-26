@@ -133,9 +133,9 @@ func (s *SeccompFilter) writeBPFProgram(path string) error {
 		// BPF_JMP | BPF_JEQ | BPF_K: if A == K, jump jt else jump jf
 		program = append(program, bpfInstruction{
 			code: BPF_JMP | BPF_JEQ | BPF_K,
-			jt:   0, // if match, go to next instruction (block)
-			jf:   1, // if not match, skip the block instruction
-			k:    uint32(num),
+			jt:   0,           // if match, go to next instruction (block)
+			jf:   1,           // if not match, skip the block instruction
+			k:    uint32(num), //nolint:gosec // syscall numbers fit in uint32
 		})
 
 		// Return action (block with EPERM)
@@ -152,11 +152,11 @@ func (s *SeccompFilter) writeBPFProgram(path string) error {
 	})
 
 	// Write the program to file
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // path is controlled
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	for _, inst := range program {
 		if err := inst.writeTo(f); err != nil {
