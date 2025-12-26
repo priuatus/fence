@@ -1,4 +1,3 @@
-// Package sandbox provides sandboxing functionality for macOS and Linux.
 package sandbox
 
 import (
@@ -18,9 +17,9 @@ type CommandBlockedError struct {
 
 func (e *CommandBlockedError) Error() string {
 	if e.IsDefault {
-		return fmt.Sprintf("command blocked by default policy: %q matches %q", e.Command, e.BlockedPrefix)
+		return fmt.Sprintf("command blocked by default sandbox command policy: %q matches %q", e.Command, e.BlockedPrefix)
 	}
-	return fmt.Sprintf("command blocked by policy: %q matches %q", e.Command, e.BlockedPrefix)
+	return fmt.Sprintf("command blocked by sandbox command policy: %q matches %q", e.Command, e.BlockedPrefix)
 }
 
 // CheckCommand checks if a command is allowed by the configuration.

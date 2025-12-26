@@ -43,6 +43,15 @@ Localhost is separate from "external domains":
 - **denyRead** can block reads from sensitive paths.
 - Fence includes an internal list of always-protected targets (e.g. shell configs, git hooks) to reduce common persistence vectors.
 
+### Environment sanitization
+
+Fence strips dangerous environment variables before passing them to sandboxed commands:
+
+- `LD_*` (Linux): `LD_PRELOAD`, `LD_LIBRARY_PATH`, etc.
+- `DYLD_*` (macOS): `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, etc.
+
+This prevents a library injection attack where a sandboxed process writes a malicious `.so`/`.dylib` and then uses `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` in a subsequent command to load it.
+
 ## Visibility / auditing
 
 - `-m/--monitor` helps you discover what a command *tries* to access (blocked only).

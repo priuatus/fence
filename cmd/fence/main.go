@@ -185,7 +185,15 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "[fence] Sandboxed command: %s\n", sandboxedCommand)
 	}
 
+	hardenedEnv := sandbox.GetHardenedEnv()
+	if debug {
+		if stripped := sandbox.GetStrippedEnvVars(os.Environ()); len(stripped) > 0 {
+			fmt.Fprintf(os.Stderr, "[fence] Stripped dangerous env vars: %v\n", stripped)
+		}
+	}
+
 	execCmd := exec.Command("sh", "-c", sandboxedCommand) //nolint:gosec // sandboxedCommand is constructed from user input - intentional
+	execCmd.Env = hardenedEnv
 	execCmd.Stdin = os.Stdin
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
@@ -318,8 +326,11 @@ parseCommand:
 		fmt.Fprintf(os.Stderr, "[fence:landlock-wrapper] Exec: %s %v\n", execPath, command[1:])
 	}
 
+	// Sanitize environment (strips LD_PRELOAD, etc.)
+	hardenedEnv := sandbox.FilterDangerousEnv(os.Environ())
+
 	// Exec the command (replaces this process)
-	err = syscall.Exec(execPath, command, os.Environ()) //nolint:gosec
+	err = syscall.Exec(execPath, command, hardenedEnv) //nolint:gosec
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[fence:landlock-wrapper] Exec failed: %v\n", err)
 		os.Exit(1)

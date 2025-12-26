@@ -1,23 +1,28 @@
 # Architecture
 
-Fence restricts network and filesystem access for arbitrary commands. It works by:
+Fence restricts network, filesystem, and command access for arbitrary commands. It works by:
 
-1. **Intercepting network traffic** via HTTP/SOCKS5 proxies that filter by domain
-2. **Sandboxing processes** using OS-native mechanisms (macOS sandbox-exec, Linux bubblewrap)
-3. **Bridging connections** to allow controlled inbound/outbound traffic in isolated namespaces
+1. **Blocking commands** via configurable deny/allow lists before execution
+2. **Intercepting network traffic** via HTTP/SOCKS5 proxies that filter by domain
+3. **Sandboxing processes** using OS-native mechanisms (macOS sandbox-exec, Linux bubblewrap)
+4. **Sanitizing environment** by stripping dangerous variables (LD_PRELOAD, DYLD_INSERT_LIBRARIES, etc.)
 
 ```mermaid
 flowchart TB
     subgraph Fence
         Config["Config<br/>(JSON)"]
         Manager
+        CmdCheck["Command<br/>Blocking"]
+        EnvSanitize["Env<br/>Sanitization"]
         Sandbox["Platform Sandbox<br/>(macOS/Linux)"]
         HTTP["HTTP Proxy<br/>(filtering)"]
         SOCKS["SOCKS5 Proxy<br/>(filtering)"]
     end
 
     Config --> Manager
-    Manager --> Sandbox
+    Manager --> CmdCheck
+    CmdCheck --> EnvSanitize
+    EnvSanitize --> Sandbox
     Manager --> HTTP
     Manager --> SOCKS
 ```
@@ -42,6 +47,8 @@ fence/
 │       ├── linux_features.go   # Kernel feature detection
 │       ├── linux_*_stub.go     # Non-Linux build stubs
 │       ├── monitor.go   # macOS log stream violation monitoring
+│       ├── command.go   # Command blocking/allow lists
+│       ├── hardening.go # Environment sanitization
 │       ├── dangerous.go # Protected file/directory lists
 │       ├── shell.go     # Shell quoting utilities
 │       └── utils.go     # Path normalization
@@ -59,12 +66,13 @@ Handles loading and validating sandbox configuration:
 type Config struct {
     Network    NetworkConfig    // Domain allow/deny lists
     Filesystem FilesystemConfig // Read/write restrictions
+    Command    CommandConfig    // Command deny/allow lists
     AllowPty   bool             // Allow pseudo-terminal allocation
 }
 ```
 
 - Loads from `~/.fence.json` or custom path
-- Falls back to restrictive defaults (block all network)
+- Falls back to restrictive defaults (block all network, default command deny list)
 - Validates paths and normalizes them
 
 ### Platform (`internal/platform/`)
@@ -108,8 +116,27 @@ Orchestrates the sandbox lifecycle:
 
 1. Initializes HTTP and SOCKS proxies
 2. Sets up platform-specific bridges (Linux)
-3. Wraps commands with sandbox restrictions
-4. Handles cleanup on exit
+3. Checks command against deny/allow lists
+4. Wraps commands with sandbox restrictions
+5. Handles cleanup on exit
+
+#### Command Blocking (`command.go`)
+
+Blocks commands before they run based on configurable policies:
+
+- **Default deny list**: Dangerous system commands (`shutdown`, `reboot`, `mkfs`, `rm -rf`, etc.)
+- **Custom deny/allow**: User-configured prefixes (e.g., `git push`, `npm publish`)
+- **Chain detection**: Parses `&&`, `||`, `;`, `|` to catch blocked commands in pipelines
+- **Nested shells**: Detects `bash -c "blocked_cmd"` patterns
+
+#### Environment Sanitization (`hardening.go`)
+
+Strips dangerous environment variables before command execution:
+
+- Linux: `LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`, etc.
+- macOS: `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH`, etc.
+
+This prevents library injection attacks where a sandboxed process writes a malicious `.so`/`.dylib` and uses `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` in a subsequent command.
 
 #### macOS Implementation (`macos.go`)
 
@@ -229,15 +256,18 @@ flowchart TD
 
     D1 & D2 & D3 & D4 --> E["5. Manager.WrapCommand()"]
 
-    E --> E1["[macOS] Generate Seatbelt profile"]
-    E --> E2["[Linux] Generate bwrap command"]
+    E --> E0{"Check command<br/>deny/allow lists"}
+    E0 -->|blocked| ERR["Return error"]
+    E0 -->|allowed| E1["[macOS] Generate Seatbelt profile"]
+    E0 -->|allowed| E2["[Linux] Generate bwrap command"]
 
-    E1 & E2 --> F["6. Execute wrapped command"]
-    F --> G["7. Manager.Cleanup()"]
+    E1 & E2 --> F["6. Sanitize env<br/>(strip LD_*/DYLD_*)"]
+    F --> G["7. Execute wrapped command"]
+    G --> H["8. Manager.Cleanup()"]
 
-    G --> G1["Kill socat processes"]
-    G --> G2["Remove Unix sockets"]
-    G --> G3["Stop proxy servers"]
+    H --> H1["Kill socat processes"]
+    H --> H2["Remove Unix sockets"]
+    H --> H3["Stop proxy servers"]
 ```
 
 ## Platform Comparison
@@ -251,6 +281,7 @@ flowchart TD
 | Syscall filtering | Implicit (Seatbelt) | seccomp BPF |
 | Inbound connections | Profile rules (`network-bind`) | Reverse socat bridges |
 | Violation monitoring | log stream + proxy | eBPF + proxy |
+| Env sanitization | Strips DYLD_* | Strips LD_* |
 | Requirements | Built-in | bwrap, socat |
 
 ### Linux Security Layers
@@ -269,7 +300,7 @@ See [Linux Security Features](./docs/linux-security-features.md) for details.
 
 ## Violation Monitoring
 
-The `-m` (monitor) flag enables real-time visibility into blocked operations.
+The `-m` (monitor) flag enables real-time visibility into blocked operations. These only apply to filesystem and network operations, not blocked commands.
 
 ### Output Prefixes
 

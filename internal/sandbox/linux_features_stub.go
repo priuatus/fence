@@ -1,6 +1,5 @@
 //go:build !linux
 
-// Package sandbox provides sandboxing functionality for macOS and Linux.
 package sandbox
 
 // LinuxFeatures describes available Linux sandboxing features.

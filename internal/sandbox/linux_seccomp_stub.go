@@ -1,6 +1,5 @@
 //go:build !linux
 
-// Package sandbox provides sandboxing functionality for macOS and Linux.
 package sandbox
 
 // SeccompFilter is a stub for non-Linux platforms.
