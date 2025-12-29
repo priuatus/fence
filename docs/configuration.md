@@ -1,6 +1,6 @@
 # Configuration
 
-Fence reads settings from `~/.fence.json` by default (or pass `--settings ./fence.json`).
+Fence reads settings from `~/.fence.json` by default (or pass `--settings ./fence.json`). Config files support JSONC.
 
 Example config:
 

@@ -14,6 +14,7 @@ import (
 	"github.com/Use-Tusk/fence/internal/config"
 	"github.com/Use-Tusk/fence/internal/platform"
 	"github.com/Use-Tusk/fence/internal/sandbox"
+	"github.com/Use-Tusk/fence/internal/templates"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +29,8 @@ var (
 	debug         bool
 	monitor       bool
 	settingsPath  string
+	templateName  string
+	listTemplates bool
 	cmdString     string
 	exposePorts   []string
 	exitCode      int
@@ -50,15 +53,18 @@ func main() {
 with network and filesystem restrictions.
 
 By default, all network access is blocked. Configure allowed domains in
-~/.fence.json or pass a settings file with --settings.
+~/.fence.json or pass a settings file with --settings, or use a built-in
+template with --template.
 
 Examples:
   fence curl https://example.com          # Will be blocked (no domains allowed)
   fence -- curl -s https://example.com    # Use -- to separate fence flags from command
   fence -c "echo hello && ls"             # Run with shell expansion
   fence --settings config.json npm install
+  fence -t npm-install npm install        # Use built-in npm-install template
+  fence -t ai-coding-agents -- agent-cmd  # Use AI coding agents template
   fence -p 3000 -c "npm run dev"          # Expose port 3000 for inbound connections
-  fence -p 3000 -p 8080 -c "npm start"    # Expose multiple ports
+  fence --list-templates                  # Show available built-in templates
 
 Configuration file format (~/.fence.json):
 {
@@ -84,6 +90,8 @@ Configuration file format (~/.fence.json):
 	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
 	rootCmd.Flags().BoolVarP(&monitor, "monitor", "m", false, "Monitor and log sandbox violations (macOS: log stream, all: proxy denials)")
 	rootCmd.Flags().StringVarP(&settingsPath, "settings", "s", "", "Path to settings file (default: ~/.fence.json)")
+	rootCmd.Flags().StringVarP(&templateName, "template", "t", "", "Use built-in template (e.g., ai-coding-agents, npm-install)")
+	rootCmd.Flags().BoolVar(&listTemplates, "list-templates", false, "List available templates")
 	rootCmd.Flags().StringVarP(&cmdString, "c", "c", "", "Run command string directly (like sh -c)")
 	rootCmd.Flags().StringArrayVarP(&exposePorts, "port", "p", nil, "Expose port for inbound connections (can be used multiple times)")
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version information")
@@ -109,6 +117,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	if linuxFeatures {
 		sandbox.PrintLinuxFeatures()
+		return nil
+	}
+
+	if listTemplates {
+		printTemplates()
 		return nil
 	}
 
@@ -139,21 +152,36 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "[fence] Exposing ports: %v\n", ports)
 	}
 
-	configPath := settingsPath
-	if configPath == "" {
-		configPath = config.DefaultConfigPath()
-	}
+	// Load config: template > settings file > default path
+	var cfg *config.Config
+	var err error
 
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	if cfg == nil {
-		if debug {
-			fmt.Fprintf(os.Stderr, "[fence] No config found at %s, using default (block all network)\n", configPath)
+	switch {
+	case templateName != "":
+		cfg, err = templates.Load(templateName)
+		if err != nil {
+			return fmt.Errorf("failed to load template: %w\nUse --list-templates to see available templates", err)
 		}
-		cfg = config.Default()
+		if debug {
+			fmt.Fprintf(os.Stderr, "[fence] Using template: %s\n", templateName)
+		}
+	case settingsPath != "":
+		cfg, err = config.Load(settingsPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+	default:
+		configPath := config.DefaultConfigPath()
+		cfg, err = config.Load(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		if cfg == nil {
+			if debug {
+				fmt.Fprintf(os.Stderr, "[fence] No config found at %s, using default (block all network)\n", configPath)
+			}
+			cfg = config.Default()
+		}
 	}
 
 	manager := sandbox.NewManager(cfg, debug, monitor)
@@ -226,11 +254,19 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// Landlock code exists for future integration (e.g., via a wrapper binary).
 
 	go func() {
-		sig := <-sigChan
-		if execCmd.Process != nil {
-			_ = execCmd.Process.Signal(sig)
+		sigCount := 0
+		for sig := range sigChan {
+			sigCount++
+			if execCmd.Process == nil {
+				continue
+			}
+			// First signal: graceful termination; second signal: force kill
+			if sigCount >= 2 {
+				_ = execCmd.Process.Kill()
+			} else {
+				_ = execCmd.Process.Signal(sig)
+			}
 		}
-		// Give child time to exit, then cleanup will happen via defer
 	}()
 
 	// Wait for command to finish
@@ -244,6 +280,18 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// printTemplates prints all available templates to stdout.
+func printTemplates() {
+	fmt.Println("Available templates:")
+	fmt.Println()
+	for _, t := range templates.List() {
+		fmt.Printf("  %-20s %s\n", t.Name, t.Description)
+	}
+	fmt.Println()
+	fmt.Println("Usage: fence -t <template> <command>")
+	fmt.Println("Example: fence -t code -- code")
 }
 
 // runLandlockWrapper runs in "wrapper mode" inside the sandbox.

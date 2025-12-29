@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/tidwall/jsonc"
 )
 
 // Config is the main configuration for fence.
@@ -134,7 +136,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(jsonc.ToJSON(data), &cfg); err != nil {
 		return nil, fmt.Errorf("invalid JSON in config file: %w", err)
 	}
 
@@ -230,6 +232,11 @@ func validateDomainPattern(pattern string) error {
 func MatchesDomain(hostname, pattern string) bool {
 	hostname = strings.ToLower(hostname)
 	pattern = strings.ToLower(pattern)
+
+	// "*" matches all domains
+	if pattern == "*" {
+		return true
+	}
 
 	// Wildcard pattern like *.example.com
 	if strings.HasPrefix(pattern, "*.") {

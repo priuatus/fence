@@ -1,8 +1,0 @@
-{
-  "network": {
-    "allowedDomains": ["api.openai.com", "api.anthropic.com"]
-  },
-  "filesystem": {
-    "allowWrite": ["."]
-  }
-}

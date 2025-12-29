@@ -13,7 +13,7 @@ Fence is a sandboxing tool that restricts network and filesystem access for arbi
 - [Troubleshooting](troubleshooting.md) - Common failure modes and fixes
 - [Using Fence with AI agents](agents.md) - Defense-in-depth and policy standardization
 - [Recipes](recipes/README.md) - Common workflows (npm/pip/git/CI)
-- [Config Templates](templates/) - Copy/paste templates you can start from
+- [Templates](./templates.md) - Copy/paste templates you can start from
 
 ## Reference
 

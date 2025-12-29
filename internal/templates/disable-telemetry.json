@@ -1,0 +1,116 @@
+{
+  "allowPty": true,
+  "network": {
+    "allowLocalBinding": true,
+    "allowLocalOutbound": true,
+    "allowedDomains": ["*"],
+
+    // Block common analytics, telemetry, and error reporting services
+    "deniedDomains": [
+      // Error reporting
+      "*.sentry.io",
+      "*.ingest.sentry.io",
+      "sentry.io",
+
+      // Product analytics
+      "*.posthog.com",
+      "app.posthog.com",
+      "us.posthog.com",
+      "eu.posthog.com",
+
+      // Feature flags / experimentation
+      "*.statsig.com",
+      "statsig.com",
+      "statsig.anthropic.com",
+
+      // Customer data platforms
+      "*.segment.io",
+      "*.segment.com",
+      "api.segment.io",
+      "cdn.segment.com",
+
+      // Analytics
+      "*.amplitude.com",
+      "api.amplitude.com",
+      "api2.amplitude.com",
+      "*.mixpanel.com",
+      "api.mixpanel.com",
+
+      "*.heap.io",
+      "*.heapanalytics.com",
+
+      // Session recording
+      "*.fullstory.com",
+      "*.hotjar.com",
+      "*.hotjar.io",
+      "*.logrocket.io",
+      "*.logrocket.com",
+
+      // Error tracking
+      "*.bugsnag.com",
+      "notify.bugsnag.com",
+      "*.rollbar.com",
+      "api.rollbar.com",
+
+      // APM / Monitoring
+      "*.datadog.com",
+      "*.datadoghq.com",
+
+      "*.newrelic.com",
+      "*.nr-data.net",
+
+      // Feature flags
+      "*.launchdarkly.com",
+      "*.split.io",
+
+      // Product analytics / user engagement
+      "*.pendo.io",
+      "*.intercom.io",
+      "*.intercom.com",
+
+      // Mobile attribution
+      "*.appsflyer.com",
+      "*.adjust.com",
+      "*.branch.io",
+
+      // Crash reporting
+      "crashlytics.com",
+      "*.crashlytics.com",
+      "firebase-settings.crashlytics.com"
+    ]
+  },
+
+  "filesystem": {
+    "allowWrite": [
+      ".",
+      "/tmp",
+
+      // Claude Code state/config
+      "~/.claude*",
+      "~/.claude/**",
+
+      // Codex state/config
+      "~/.codex/**",
+
+      // Package manager caches
+      "~/.npm/_cacache",
+      "~/.cache",
+      "~/.bun/**",
+
+      // Cargo cache (Rust, used by Codex)
+      "~/.cargo/registry/**",
+      "~/.cargo/git/**",
+      "~/.cargo/.package-cache",
+
+      // Shell completion cache
+      "~/.zcompdump*",
+
+      // XDG directories for app configs/data
+      "~/.local/share/**",
+      "~/.config/**",
+
+      // OpenCode state
+      "~/.opencode/**"
+    ]
+  }
+}

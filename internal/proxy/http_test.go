@@ -170,6 +170,41 @@ func TestCreateDomainFilter(t *testing.T) {
 			port:    443,
 			allowed: false,
 		},
+		{
+			name: "star wildcard allows all",
+			cfg: &config.Config{
+				Network: config.NetworkConfig{
+					AllowedDomains: []string{"*"},
+				},
+			},
+			host:    "any-domain.example.com",
+			port:    443,
+			allowed: true,
+		},
+		{
+			name: "star wildcard with deny list",
+			cfg: &config.Config{
+				Network: config.NetworkConfig{
+					AllowedDomains: []string{"*"},
+					DeniedDomains:  []string{"blocked.com"},
+				},
+			},
+			host:    "blocked.com",
+			port:    443,
+			allowed: false,
+		},
+		{
+			name: "star wildcard allows non-denied",
+			cfg: &config.Config{
+				Network: config.NetworkConfig{
+					AllowedDomains: []string{"*"},
+					DeniedDomains:  []string{"blocked.com"},
+				},
+			},
+			host:    "allowed.com",
+			port:    443,
+			allowed: true,
+		},
 	}
 
 	for _, tt := range tests {

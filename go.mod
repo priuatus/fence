@@ -6,6 +6,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/spf13/cobra v1.8.1
 	github.com/things-go/go-socks5 v0.0.5
+	github.com/tidwall/jsonc v0.3.2
 	golang.org/x/sys v0.39.0
 )
 

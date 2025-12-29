@@ -1,8 +1,0 @@
-{
-  "network": {
-    "allowedDomains": ["pypi.org", "files.pythonhosted.org"]
-  },
-  "filesystem": {
-    "allowWrite": [".", "/tmp"]
-  }
-}
