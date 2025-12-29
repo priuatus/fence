@@ -59,6 +59,9 @@
       // Temp files
       "/tmp",
 
+      // Local cache, needed by tools like `uv`
+      "~/.cache/**",
+
       // Claude Code state/config
       "~/.claude*",
       "~/.claude/**",
