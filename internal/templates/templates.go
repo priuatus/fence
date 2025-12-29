@@ -32,6 +32,7 @@ var templateDescriptions = map[string]string{
 	"local-dev-server":  "Allow binding and localhost outbound; allow writes to workspace/tmp",
 	"git-readonly":      "Blocks destructive commands like git push, rm -rf, etc.",
 	"code":              "Production-ready config for AI coding agents (Claude Code, Codex, Copilot, etc.)",
+	"code-relaxed":      "Like 'code' but allows direct network for apps that ignore HTTP_PROXY (cursor-agent, opencode)",
 }
 
 // List returns all available template names sorted alphabetically.

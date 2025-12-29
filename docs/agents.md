@@ -36,17 +36,23 @@ Run:
 fence --settings ./fence.json <agent-command>
 ```
 
-## Real-world usage
+## Popular CLI coding agents
 
-Currently, we provide the `code.json` template. You can use it by running `fence -t code -- claude`.
+We provide these template for guardrailing CLI coding agents:
 
-However, not all coding agent CLIs work with Fence yet. We're actively investigating these issues.
+- [`code`](/internal/templates/code.json) - Strict deny-by-default network filtering via proxy. Works with agents that respect `HTTP_PROXY`. Blocks cloud metadata APIs, protects secrets, restricts dangerous commands.
+- [`code-relaxed`](/internal/templates/code-relaxed.json) - Allows direct network connections for agents that ignore `HTTP_PROXY`. Same filesystem/command protections as `code`, but `deniedDomains` only enforced for proxy-respecting apps.
 
-| Agent | Works? | Notes |
+You can use it like `fence -t code -- claude`.
+
+However, not all coding agent CLIs work with Fence at the moment.
+
+| Agent | Works with template | Notes |
 |-------|--------| ----- |
-| Claude Code | ✅ | Fully working with `code` template |
-| Codex | ❌ | Missing unidentified sandbox permission for interactive mode |
-| OpenCode | ❌ | Ignores proxy env vars; makes direct network connections |
+| Claude Code | `code` | - |
+| Codex | `code` | |
+| Cursor Agent | `code-relaxed` | Node.js/undici doesn't respect HTTP_PROXY |
+| OpenCode | - | TUI hangs. Bun runtime doesn't respect HTTP_PROXY; architectural limitation |
 
 ## Protecting your environment
 

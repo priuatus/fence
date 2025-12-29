@@ -34,6 +34,19 @@ Example config:
 | `httpProxyPort` | Fixed port for HTTP proxy (default: random available port) |
 | `socksProxyPort` | Fixed port for SOCKS5 proxy (default: random available port) |
 
+### Wildcard Domain Access
+
+Setting `allowedDomains: ["*"]` enables **relaxed network mode**:
+
+- Direct network connections are allowed (sandbox doesn't block outbound)
+- Proxy still runs for apps that respect `HTTP_PROXY`
+- `deniedDomains` is only enforced for apps using the proxy
+
+> [!WARNING]
+> **Security tradeoff**: Apps that ignore `HTTP_PROXY` will bypass `deniedDomains` filtering entirely.
+
+Use this when you need to support apps that don't respect proxy environment variables.
+
 ## Filesystem Configuration
 
 | Field | Description |

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -275,6 +276,19 @@ func WrapCommandLinuxWithOptions(cfg *config.Config, command string, bridge *Lin
 		fmt.Fprintf(os.Stderr, "[fence:linux] Available features: %s\n", features.Summary())
 	}
 
+	// Check if allowedDomains contains "*" (wildcard = allow all direct network)
+	// In this mode, we skip network namespace isolation so apps that don't
+	// respect HTTP_PROXY can make direct connections.
+	hasWildcardAllow := false
+	if cfg != nil {
+		hasWildcardAllow = slices.Contains(cfg.Network.AllowedDomains, "*")
+	}
+
+	if opts.Debug && hasWildcardAllow {
+		fmt.Fprintf(os.Stderr, "[fence:linux] Wildcard allowedDomains detected - allowing direct network connections\n")
+		fmt.Fprintf(os.Stderr, "[fence:linux] Note: deniedDomains only enforced for apps that respect HTTP_PROXY\n")
+	}
+
 	// Build bwrap args with filesystem restrictions
 	bwrapArgs := []string{
 		"bwrap",
@@ -282,11 +296,13 @@ func WrapCommandLinuxWithOptions(cfg *config.Config, command string, bridge *Lin
 		"--die-with-parent",
 	}
 
-	// Only use --unshare-net if the environment supports it
+	// Only use --unshare-net if:
+	// 1. The environment supports it (has CAP_NET_ADMIN)
+	// 2. We're NOT in wildcard mode (need direct network access)
 	// Containerized environments (Docker, CI) often lack CAP_NET_ADMIN
-	if features.CanUnshareNet {
+	if features.CanUnshareNet && !hasWildcardAllow {
 		bwrapArgs = append(bwrapArgs, "--unshare-net") // Network namespace isolation
-	} else if opts.Debug {
+	} else if opts.Debug && !features.CanUnshareNet {
 		fmt.Fprintf(os.Stderr, "[fence:linux] Skipping --unshare-net (network namespace unavailable in this environment)\n")
 	}
 

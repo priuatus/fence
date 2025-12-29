@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/Use-Tusk/fence/internal/config"
@@ -493,6 +494,12 @@ func GenerateSandboxProfile(params MacOSSandboxParams) string {
 
 // WrapCommandMacOS wraps a command with macOS sandbox restrictions.
 func WrapCommandMacOS(cfg *config.Config, command string, httpPort, socksPort int, exposedPorts []int, debug bool) (string, error) {
+	// Check if allowedDomains contains "*" (wildcard = allow all direct network)
+	// In this mode, we still run the proxy for apps that respect HTTP_PROXY,
+	// but allow direct connections for apps that don't (like cursor-agent, opencode).
+	// deniedDomains will only be enforced for apps that use the proxy.
+	hasWildcardAllow := slices.Contains(cfg.Network.AllowedDomains, "*")
+
 	needsNetwork := len(cfg.Network.AllowedDomains) > 0 || len(cfg.Network.DeniedDomains) > 0
 
 	// Build allow paths: default + configured
@@ -506,9 +513,18 @@ func WrapCommandMacOS(cfg *config.Config, command string, httpPort, socksPort in
 		allowLocalOutbound = *cfg.Network.AllowLocalOutbound
 	}
 
+	// If wildcard allow, don't restrict network at sandbox level (allow direct connections).
+	// Otherwise, restrict to localhost/proxy only (strict mode).
+	needsNetworkRestriction := !hasWildcardAllow && (needsNetwork || len(cfg.Network.AllowedDomains) == 0)
+
+	if debug && hasWildcardAllow {
+		fmt.Fprintf(os.Stderr, "[fence:macos] Wildcard allowedDomains detected - allowing direct network connections\n")
+		fmt.Fprintf(os.Stderr, "[fence:macos] Note: deniedDomains only enforced for apps that respect HTTP_PROXY\n")
+	}
+
 	params := MacOSSandboxParams{
 		Command:                 command,
-		NeedsNetworkRestriction: needsNetwork || len(cfg.Network.AllowedDomains) == 0, // Block if no domains allowed
+		NeedsNetworkRestriction: needsNetworkRestriction,
 		HTTPProxyPort:           httpPort,
 		SOCKSProxyPort:          socksPort,
 		AllowUnixSockets:        cfg.Network.AllowUnixSockets,
@@ -541,7 +557,6 @@ func WrapCommandMacOS(cfg *config.Config, command string, httpPort, socksPort in
 		return "", fmt.Errorf("shell %q not found: %w", shell, err)
 	}
 
-	// Generate proxy environment variables
 	proxyEnvs := GenerateProxyEnvVars(httpPort, socksPort)
 
 	// Build the command

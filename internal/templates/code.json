@@ -14,6 +14,9 @@
       "api.together.xyz",
       "openrouter.ai",
 
+      // Cursor API
+      "*.cursor.sh",
+
       // Git hosting
       "github.com",
       "api.github.com",
@@ -62,6 +65,9 @@
 
       // Codex state/config
       "~/.codex/**",
+
+      // Cursor state/config
+      "~/.cursor/**",
 
       // Package manager caches
       "~/.npm/_cacache",
