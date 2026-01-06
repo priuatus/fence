@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -170,6 +171,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+		absPath, _ := filepath.Abs(settingsPath)
+		cfg, err = templates.ResolveExtendsWithBaseDir(cfg, filepath.Dir(absPath))
+		if err != nil {
+			return fmt.Errorf("failed to resolve extends: %w", err)
+		}
 	default:
 		configPath := config.DefaultConfigPath()
 		cfg, err = config.Load(configPath)
@@ -181,6 +187,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(os.Stderr, "[fence] No config found at %s, using default (block all network)\n", configPath)
 			}
 			cfg = config.Default()
+		} else {
+			cfg, err = templates.ResolveExtendsWithBaseDir(cfg, filepath.Dir(configPath))
+			if err != nil {
+				return fmt.Errorf("failed to resolve extends: %w", err)
+			}
 		}
 	}
 

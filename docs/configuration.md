@@ -21,6 +21,66 @@ Example config:
 }
 ```
 
+## Config Inheritance
+
+You can extend built-in templates or other config files using the `extends` field. This reduces boilerplate by inheriting settings from a base and only specifying your overrides.
+
+### Extending a template
+
+```json
+{
+  "extends": "code",
+  "network": {
+    "allowedDomains": ["private-registry.company.com"]
+  }
+}
+```
+
+This config:
+
+- Inherits all settings from the `code` template (LLM providers, package registries, filesystem protections, command restrictions)
+- Adds `private-registry.company.com` to the allowed domains list
+
+### Extending a file
+
+You can also extend other config files using absolute or relative paths:
+
+```json
+{
+  "extends": "./base-config.json",
+  "network": {
+    "allowedDomains": ["extra-domain.com"]
+  }
+}
+```
+
+```json
+{
+  "extends": "/etc/fence/company-base.json",
+  "filesystem": {
+    "denyRead": ["~/company-secrets/**"]
+  }
+}
+```
+
+Relative paths are resolved relative to the config file's directory. The extended file is validated before merging.
+
+### Detection
+
+The `extends` value is treated as a file path if it contains `/` or `\`, or starts with `.`. Otherwise it's treated as a template name.
+
+### Merge behavior
+
+- Slice fields (domains, paths, commands) are appended and deduplicated
+- Boolean fields use OR logic (true if either base or override enables it)
+- Integer fields (ports) use override-wins semantics (0 keeps base value)
+
+### Chaining
+
+Extends chains are supported—a file can extend a template, and another file can extend that file. Circular extends are detected and rejected. Maximum chain depth is 10.
+
+See [templates.md](templates.md) for available templates.
+
 ## Network Configuration
 
 | Field | Description |

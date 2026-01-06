@@ -291,3 +291,192 @@ func TestDefaultConfigPath(t *testing.T) {
 		t.Errorf("DefaultConfigPath() = %q, expected to end with .fence.json", path)
 	}
 }
+
+func TestMerge(t *testing.T) {
+	t.Run("nil base", func(t *testing.T) {
+		override := &Config{
+			AllowPty: true,
+			Network: NetworkConfig{
+				AllowedDomains: []string{"example.com"},
+			},
+		}
+		result := Merge(nil, override)
+		if !result.AllowPty {
+			t.Error("expected AllowPty to be true")
+		}
+		if len(result.Network.AllowedDomains) != 1 || result.Network.AllowedDomains[0] != "example.com" {
+			t.Error("expected AllowedDomains to be [example.com]")
+		}
+		if result.Extends != "" {
+			t.Error("expected Extends to be cleared")
+		}
+	})
+
+	t.Run("nil override", func(t *testing.T) {
+		base := &Config{
+			AllowPty: true,
+			Network: NetworkConfig{
+				AllowedDomains: []string{"example.com"},
+			},
+		}
+		result := Merge(base, nil)
+		if !result.AllowPty {
+			t.Error("expected AllowPty to be true")
+		}
+		if len(result.Network.AllowedDomains) != 1 {
+			t.Error("expected AllowedDomains to be [example.com]")
+		}
+	})
+
+	t.Run("both nil", func(t *testing.T) {
+		result := Merge(nil, nil)
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+	})
+
+	t.Run("merge allowed domains", func(t *testing.T) {
+		base := &Config{
+			Network: NetworkConfig{
+				AllowedDomains: []string{"github.com", "api.github.com"},
+			},
+		}
+		override := &Config{
+			Extends: "base-template",
+			Network: NetworkConfig{
+				AllowedDomains: []string{"private-registry.company.com"},
+			},
+		}
+		result := Merge(base, override)
+
+		// Should have all three domains
+		if len(result.Network.AllowedDomains) != 3 {
+			t.Errorf("expected 3 allowed domains, got %d: %v", len(result.Network.AllowedDomains), result.Network.AllowedDomains)
+		}
+
+		// Extends should be cleared
+		if result.Extends != "" {
+			t.Errorf("expected Extends to be cleared, got %q", result.Extends)
+		}
+	})
+
+	t.Run("deduplicate merged domains", func(t *testing.T) {
+		base := &Config{
+			Network: NetworkConfig{
+				AllowedDomains: []string{"github.com", "example.com"},
+			},
+		}
+		override := &Config{
+			Network: NetworkConfig{
+				AllowedDomains: []string{"github.com", "new.com"},
+			},
+		}
+		result := Merge(base, override)
+
+		// Should deduplicate
+		if len(result.Network.AllowedDomains) != 3 {
+			t.Errorf("expected 3 domains (deduped), got %d: %v", len(result.Network.AllowedDomains), result.Network.AllowedDomains)
+		}
+	})
+
+	t.Run("merge boolean flags", func(t *testing.T) {
+		base := &Config{
+			AllowPty: false,
+			Network: NetworkConfig{
+				AllowLocalBinding: true,
+			},
+		}
+		override := &Config{
+			AllowPty: true,
+			Network: NetworkConfig{
+				AllowLocalOutbound: boolPtr(true),
+			},
+		}
+		result := Merge(base, override)
+
+		if !result.AllowPty {
+			t.Error("expected AllowPty to be true (from override)")
+		}
+		if !result.Network.AllowLocalBinding {
+			t.Error("expected AllowLocalBinding to be true (from base)")
+		}
+		if result.Network.AllowLocalOutbound == nil || !*result.Network.AllowLocalOutbound {
+			t.Error("expected AllowLocalOutbound to be true (from override)")
+		}
+	})
+
+	t.Run("merge command config", func(t *testing.T) {
+		base := &Config{
+			Command: CommandConfig{
+				Deny: []string{"git push", "rm -rf"},
+			},
+		}
+		override := &Config{
+			Command: CommandConfig{
+				Deny:  []string{"sudo"},
+				Allow: []string{"git status"},
+			},
+		}
+		result := Merge(base, override)
+
+		if len(result.Command.Deny) != 3 {
+			t.Errorf("expected 3 denied commands, got %d", len(result.Command.Deny))
+		}
+		if len(result.Command.Allow) != 1 {
+			t.Errorf("expected 1 allowed command, got %d", len(result.Command.Allow))
+		}
+	})
+
+	t.Run("merge filesystem config", func(t *testing.T) {
+		base := &Config{
+			Filesystem: FilesystemConfig{
+				AllowWrite: []string{"."},
+				DenyRead:   []string{"~/.ssh/**"},
+			},
+		}
+		override := &Config{
+			Filesystem: FilesystemConfig{
+				AllowWrite: []string{"/tmp"},
+				DenyWrite:  []string{".env"},
+			},
+		}
+		result := Merge(base, override)
+
+		if len(result.Filesystem.AllowWrite) != 2 {
+			t.Errorf("expected 2 write paths, got %d", len(result.Filesystem.AllowWrite))
+		}
+		if len(result.Filesystem.DenyRead) != 1 {
+			t.Errorf("expected 1 deny read path, got %d", len(result.Filesystem.DenyRead))
+		}
+		if len(result.Filesystem.DenyWrite) != 1 {
+			t.Errorf("expected 1 deny write path, got %d", len(result.Filesystem.DenyWrite))
+		}
+	})
+
+	t.Run("override ports", func(t *testing.T) {
+		base := &Config{
+			Network: NetworkConfig{
+				HTTPProxyPort:  8080,
+				SOCKSProxyPort: 1080,
+			},
+		}
+		override := &Config{
+			Network: NetworkConfig{
+				HTTPProxyPort: 9090, // override
+				// SOCKSProxyPort not set, should keep base
+			},
+		}
+		result := Merge(base, override)
+
+		if result.Network.HTTPProxyPort != 9090 {
+			t.Errorf("expected HTTPProxyPort 9090, got %d", result.Network.HTTPProxyPort)
+		}
+		if result.Network.SOCKSProxyPort != 1080 {
+			t.Errorf("expected SOCKSProxyPort 1080, got %d", result.Network.SOCKSProxyPort)
+		}
+	})
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}

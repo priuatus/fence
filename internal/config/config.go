@@ -15,6 +15,7 @@ import (
 
 // Config is the main configuration for fence.
 type Config struct {
+	Extends    string           `json:"extends,omitempty"`
 	Network    NetworkConfig    `json:"network"`
 	Filesystem FilesystemConfig `json:"filesystem"`
 	Command    CommandConfig    `json:"command"`
@@ -246,4 +247,110 @@ func MatchesDomain(hostname, pattern string) bool {
 
 	// Exact match
 	return hostname == pattern
+}
+
+// Merge combines a base config with an override config.
+// Values in override take precedence. Slice fields are appended (base + override).
+// The Extends field is cleared in the result since inheritance has been resolved.
+func Merge(base, override *Config) *Config {
+	if base == nil {
+		if override == nil {
+			return Default()
+		}
+		result := *override
+		result.Extends = ""
+		return &result
+	}
+	if override == nil {
+		result := *base
+		result.Extends = ""
+		return &result
+	}
+
+	result := &Config{
+		// AllowPty: true if either config enables it
+		AllowPty: base.AllowPty || override.AllowPty,
+
+		Network: NetworkConfig{
+			// Append slices (base first, then override additions)
+			AllowedDomains:   mergeStrings(base.Network.AllowedDomains, override.Network.AllowedDomains),
+			DeniedDomains:    mergeStrings(base.Network.DeniedDomains, override.Network.DeniedDomains),
+			AllowUnixSockets: mergeStrings(base.Network.AllowUnixSockets, override.Network.AllowUnixSockets),
+
+			// Boolean fields: override wins if set, otherwise base
+			AllowAllUnixSockets: base.Network.AllowAllUnixSockets || override.Network.AllowAllUnixSockets,
+			AllowLocalBinding:   base.Network.AllowLocalBinding || override.Network.AllowLocalBinding,
+
+			// Pointer fields: override wins if set, otherwise base
+			AllowLocalOutbound: mergeOptionalBool(base.Network.AllowLocalOutbound, override.Network.AllowLocalOutbound),
+
+			// Port fields: override wins if non-zero
+			HTTPProxyPort:  mergeInt(base.Network.HTTPProxyPort, override.Network.HTTPProxyPort),
+			SOCKSProxyPort: mergeInt(base.Network.SOCKSProxyPort, override.Network.SOCKSProxyPort),
+		},
+
+		Filesystem: FilesystemConfig{
+			// Append slices
+			DenyRead:   mergeStrings(base.Filesystem.DenyRead, override.Filesystem.DenyRead),
+			AllowWrite: mergeStrings(base.Filesystem.AllowWrite, override.Filesystem.AllowWrite),
+			DenyWrite:  mergeStrings(base.Filesystem.DenyWrite, override.Filesystem.DenyWrite),
+
+			// Boolean fields: override wins if set
+			AllowGitConfig: base.Filesystem.AllowGitConfig || override.Filesystem.AllowGitConfig,
+		},
+
+		Command: CommandConfig{
+			// Append slices
+			Deny:  mergeStrings(base.Command.Deny, override.Command.Deny),
+			Allow: mergeStrings(base.Command.Allow, override.Command.Allow),
+
+			// Pointer field: override wins if set
+			UseDefaults: mergeOptionalBool(base.Command.UseDefaults, override.Command.UseDefaults),
+		},
+	}
+
+	return result
+}
+
+// mergeStrings appends two string slices, removing duplicates.
+func mergeStrings(base, override []string) []string {
+	if len(base) == 0 {
+		return override
+	}
+	if len(override) == 0 {
+		return base
+	}
+
+	seen := make(map[string]bool, len(base))
+	result := make([]string, 0, len(base)+len(override))
+
+	for _, s := range base {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range override {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// mergeOptionalBool returns override if non-nil, otherwise base.
+func mergeOptionalBool(base, override *bool) *bool {
+	if override != nil {
+		return override
+	}
+	return base
+}
+
+// mergeInt returns override if non-zero, otherwise base.
+func mergeInt(base, override int) int {
+	if override != 0 {
+		return override
+	}
+	return base
 }

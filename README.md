@@ -93,6 +93,7 @@ Flags:
   -m, --monitor    Monitor mode (shows blocked requests and violations only)
   -p, --port       Expose port for inbound connections (can be repeated)
   -s, --settings   Path to settings file (default: ~/.fence.json)
+  -t, --template   Use built-in template (e.g., code, local-dev-server)
   -v, --version    Show version information
   -h, --help       Help for fence
 ```
@@ -103,6 +104,13 @@ Flags:
 # Block all network (default behavior)
 fence curl https://example.com
 # Output: curl: (56) CONNECT tunnel failed, response 403
+
+# Use a built-in template
+fence -t code -- claude
+
+# Extend a template in your config (adds private registry to 'code' template)
+# ~/.fence.json: {"extends": "code", "network": {"allowedDomains": ["private.company.com"]}}
+fence npm install
 
 # Use a custom config
 fence --settings ./my-config.json npm install
