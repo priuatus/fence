@@ -6,6 +6,8 @@ A Go implementation of process sandboxing with network and filesystem restrictio
 
 Fence wraps commands in a sandbox that blocks network access by default and restricts filesystem operations based on configurable rules. It's most useful for running semi-trusted code (package installs, build scripts, CI jobs, unfamiliar repos) with controlled side effects, and it can also complement AI coding agents as defense-in-depth.
 
+You can also think of Fence as a permission manager for your CLI coding agents.
+
 ## Features
 
 - **Network Isolation**: All network access blocked by default
@@ -17,7 +19,7 @@ Fence wraps commands in a sandbox that blocks network access by default and rest
 - **HTTP/SOCKS5 Proxies**: Built-in filtering proxies for domain control
 - **Permission Import**: Using Claude Code? Import your Claude permissions as Fence configs with `fence import --claude -o ~/.fence.json`
 
-You can use Fence as a Go package or CLI tool.
+Fence can be used as a Go package or CLI tool.
 
 ## Documentation
 
