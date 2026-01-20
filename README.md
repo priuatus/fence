@@ -1,6 +1,10 @@
-# Fence
+![Fence Banner](assets/fence-banner.png)
+
+<div align="center">
 
 ![GitHub Release](https://img.shields.io/github/v/release/Use-Tusk/fence)
+
+</div>
 
 Fence wraps commands in a sandbox that blocks network access by default and restricts filesystem operations based on configurable rules. It's most useful for running semi-trusted code (package installs, build scripts, CI jobs, unfamiliar repos) with controlled side effects, and it can also complement AI coding agents as defense-in-depth.
 
